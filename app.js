@@ -1,12 +1,72 @@
 const fs = require('fs');
 const axios = require('axios');
-const { versions } = require('process');
 
-const url = 'http://localhost/ga4gh/trs/v2/tools';
+const TRS_API_URL = 'http://localhost/ga4gh/trs/v2/tools';
+const GITHUB_BASE_URL = "https://www.github.com/";
+const DESCRIPTER_TYPES = {
+    CWL: "CWL",
+    WDL: "WDL",
+    NFL: "NFL",
+    GALAXY: "GALAXY"
+}
+const IMAGE_TYPE = {
+    DOCKER: "Docker",
+    SINGULARITY: "Singularity",
+    CONDA: "Conda"
+}
+const FILE_TYPE = {
+    TEST_FILE: "TEST_FILE",
+    PRIMARY_DESCRIPTOR: "PRIMARY_DESCRIPTOR",
+    SECONDARY_DESCRIPTOR: "SECONDARY_DESCRIPTOR",
+    CONTAINERFILE: "CONTAINERFILE",
+    OTHER: "OTHER"
+}
+
+function createImageDataRegister({
+    checksum = [],
+    image_name = "string",
+    image_type,
+    registry_host = "string",
+    size = 0,
+    updated = "string"
+}) {
+    return {
+        checksum,
+        image_name,
+        image_type,
+        registry_host,
+        size,
+        updated
+    }
+}
+function createFileWrapper({
+    checksum = [],
+    content = "string",
+    url = "string"
+}) {
+    return {
+        checksum,
+        content,
+        url
+    }
+}
+
+function createToolFileRegister({ file_type, path = "string" }) {
+    return {
+        file_type,
+        path
+    }
+}
+
+function createFilesRegister({
+    file_wrapper,
+    tool_file,
+    type
+}) { return { file_wrapper, tool_file, type } }
 
 function createToolVersionRegisterId(
     {
-        id = "string",
+        id = null,
         author = [],
         descriptor_type = [],
         files = [],
@@ -19,7 +79,7 @@ function createToolVersionRegisterId(
         verified_source = []
     }
 ) {
-    return {
+    const result = {
         id,
         author,
         descriptor_type,
@@ -32,6 +92,14 @@ function createToolVersionRegisterId(
         verified,
         verified_source
     }
+
+    // Remove "id" key if null or undefined
+    if (!result['id']) {
+        delete result['id'];
+        console.log(result);
+    }
+
+    return result;
 }
 
 function createToolclassRegisterId({ description = "string", id = "string", name = "string" }) {
@@ -59,17 +127,17 @@ function createToolRegister({ description, aliases, checkerUrl, hasChecker, name
 function trsConverter(swcObj) {
     console.log(swcObj);
     console.log("---------------")
-    const version = createToolVersionRegisterId({ author: [swcObj.full_name], descriptor_type: ["CWL"], name: swcObj.full_name, verified: true, verified_source: ["Snakemake Workflow Catalog"] });
+    const version = createToolVersionRegisterId({ author: [swcObj.full_name], descriptor_type: [DESCRIPTER_TYPES.CWL], name: swcObj.full_name, verified: true, verified_source: ["Snakemake Workflow Catalog"] });
     const toolclass = createToolclassRegisterId({ description: swcObj.description, name: swcObj.full_name });
-    return createToolRegister({ description: swcObj.description, name: swcObj.full_name, organization: "https://www.github.com/" + swcObj.full_name.split('/')[0], toolclassRegisterId: toolclass, versions: [version] })
+    return createToolRegister({ description: swcObj.description, name: swcObj.full_name, organization: GITHUB_BASE_URL + swcObj.full_name.split('/')[0], toolclassRegisterId: toolclass, versions: [version] })
 }
 
 const filePath = "/home/tanmay/Documents/snakemake-catalog-parser/data.js";
 
 function postTRSTool(trsObj) {
-    axios.post(url, trsObj)
+    axios.post(TRS_API_URL, trsObj)
         .then(function (response) {
-            console.log(response);
+            console.log(response['data']);
         })
         .catch(function (error) {
             console.log(error['code']);
