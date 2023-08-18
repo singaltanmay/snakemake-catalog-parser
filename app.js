@@ -39,6 +39,12 @@ function createImageDataRegister({
         updated
     }
 }
+
+function sanitizeNonRequiredKeys(obj, reqd) {
+    let o = Object.fromEntries(Object.entries(obj).filter(([_, v]) => reqd.includes(v) || (v && v != null && v != 'null')));
+    return o;
+}
+
 function createFileWrapper({
     checksum = [],
     content = "string",
@@ -103,15 +109,17 @@ function createToolVersionRegisterId(
 }
 
 function createToolclassRegisterId({ description = "string", id = "string", name = "string" }) {
-    return {
+    const obj = {
         description: description,
         id: id,
         name: name
     }
+    const reqdKeys = [];
+    return sanitizeNonRequiredKeys(obj, reqdKeys);
 }
 
 function createToolRegister({ description, aliases, checkerUrl, hasChecker, name, organization, toolclassRegisterId, versions }) {
-    return {
+    const obj = {
         description: description || "string",
         aliases: aliases || [],
         checker_url: checkerUrl || "string",
@@ -120,11 +128,13 @@ function createToolRegister({ description, aliases, checkerUrl, hasChecker, name
         organization: organization,
         toolclass: toolclassRegisterId,
         versions: versions
-    }
+    };
+    const reqdKeys = ['organization', 'toolclass', 'versions'];
+    return sanitizeNonRequiredKeys(obj, reqdKeys);
 }
 
 // Convert a SWC object into a TRS-Filer POST API object
-function trsConverter(swcObj) {
+function swcConverter(swcObj) {
     console.log(swcObj);
     console.log("---------------")
     const version = createToolVersionRegisterId({ author: [swcObj.full_name], descriptor_type: [DESCRIPTER_TYPES.CWL], name: swcObj.full_name, verified: true, verified_source: ["Snakemake Workflow Catalog"] });
@@ -137,10 +147,11 @@ const filePath = "/home/tanmay/Documents/snakemake-catalog-parser/data.js";
 function postTRSTool(trsObj) {
     axios.post(TRS_API_URL, trsObj)
         .then(function (response) {
-            console.log(response['data']);
+            return response['data'];
         })
         .catch(function (error) {
-            console.log(error['code']);
+            console.error(error);
+            throw new Error(error['code']);
         });
 }
 
@@ -148,7 +159,12 @@ function postTRSTool(trsObj) {
 fs.readFile(filePath, function (error, content) {
     //console.log(content.byteOffset(1000))
     const data = JSON.parse(content);
-    const trsObject = trsConverter(data[0]);
-    console.log(JSON.stringify(trsObject));
-    postTRSTool(trsObject);
+    data.forEach(it => {
+        const trsObject = swcConverter(it);
+        console.log(JSON.stringify(trsObject));
+        try { postTRSTool(trsObject) } catch (e) {
+            console.error(it);
+            return;
+        }
+    })
 });
