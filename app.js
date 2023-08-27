@@ -1,7 +1,8 @@
-const fs = require('fs');
 const axios = require('axios');
+require('dotenv').config();
 
-const TRS_API_URL = 'http://localhost/ga4gh/trs/v2/tools';
+const TRS_API_URL = process.env.TRS_API_URL;
+const SWC_DATA_URL = process.env.SWC_DATA_URL || "https://raw.githubusercontent.com/snakemake/snakemake-workflow-catalog/main/data.js";
 const GITHUB_BASE_URL = "https://www.github.com";
 
 const DESCRIPTER_TYPES = {
@@ -167,27 +168,25 @@ function postTRSTool(trsObj) {
 }
 
 async function checkToolExists(name) {
-    axios.get(TRS_API_URL, { params: { limit: 1, toolname: name } })
-        .then(function (response) {
-            //console.log(response['data']);
-            return response['data'] && response['data'].length > 1
-        })
-        .catch(function (error) {
-            console.error(error);
-            return false;
-        });
-
+    try {
+        const response = await axios.get(TRS_API_URL, { params: { limit: 1, toolname: name } });
+        //console.log(response['data']);
+        return response['data'] && response['data'].length > 0
+    } catch (error) {
+        console.error(error);
+        return false;
+    }
 }
 
 // Get the latest Snakemake Workflow Catalogue data file and POST all tools to TRS-Filer
-axios.get("https://raw.githubusercontent.com/snakemake/snakemake-workflow-catalog/main/data.js").then(({ data }) => {
+axios.get(SWC_DATA_URL).then(({ data }) => {
+    // Parse the SWC data.js file while skipping the intial "var data =" line
     data = JSON.parse(data.substring(data.indexOf("\n") + 1));
     let count = 0;
-    data.forEach(it => {
-
+    data.forEach(async it => {
         // Check if tool already exists in TRS
-        const is_tool_already_exist = checkToolExists(it.full_name)
-        if (!is_tool_already_exist) {
+        const isToolExists = await checkToolExists(it.full_name)
+        if (!isToolExists) {
             const trsObject = swcConverter(it);
             try { postTRSTool(trsObject) } catch (e) {
                 console.error(it);
