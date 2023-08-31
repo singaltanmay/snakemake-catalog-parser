@@ -30,9 +30,9 @@ function deleteNullNonReqdKeys(obj, reqd) {
 }
 
 function createChecksumRegister({
-    checksum,
-    type
-}) {
+                                    checksum,
+                                    type
+                                }) {
     const obj = {
         checksum,
         type
@@ -42,13 +42,13 @@ function createChecksumRegister({
 }
 
 function createImageDataRegister({
-    checksum,
-    image_name,
-    image_type,
-    registry_host,
-    size,
-    updated
-}) {
+                                     checksum,
+                                     image_name,
+                                     image_type,
+                                     registry_host,
+                                     size,
+                                     updated
+                                 }) {
     const obj = {
         checksum,
         image_name,
@@ -61,10 +61,10 @@ function createImageDataRegister({
 }
 
 function createFileWrapperRegister({
-    checksum,
-    content,
-    url
-}) {
+                                       checksum,
+                                       content,
+                                       url
+                                   }) {
     const obj = {
         checksum,
         content,
@@ -73,7 +73,7 @@ function createFileWrapperRegister({
     return deleteNullNonReqdKeys(obj, []);
 }
 
-function createToolFileRegister({ file_type, path = "string" }) {
+function createToolFileRegister({file_type, path = "string"}) {
     const obj = {
         file_type,
         path
@@ -83,11 +83,11 @@ function createToolFileRegister({ file_type, path = "string" }) {
 }
 
 function createFilesRegister({
-    file_wrapper,
-    tool_file,
-    type
-}) {
-    const obj = { file_wrapper, tool_file, type };
+                                 file_wrapper,
+                                 tool_file,
+                                 type
+                             }) {
+    const obj = {file_wrapper, tool_file, type};
     const reqdKeys = ['file_wrapper', 'tool_file', 'type'];
     return deleteNullNonReqdKeys(obj, reqdKeys);
 }
@@ -123,7 +123,7 @@ function createToolVersionRegisterId(
     return deleteNullNonReqdKeys(obj, []);
 }
 
-function createToolclassRegisterId({ description, id, name }) {
+function createToolclassRegisterId({description, id, name}) {
     const obj = {
         description: description,
         id: id,
@@ -132,7 +132,7 @@ function createToolclassRegisterId({ description, id, name }) {
     return deleteNullNonReqdKeys(obj, []);
 }
 
-function createToolRegister({ description, aliases, checker_url, has_checker, name, organization, toolclass, versions }) {
+function createToolRegister({description, aliases, checker_url, has_checker, name, organization, toolclass, versions}) {
     const obj = {
         description,
         aliases,
@@ -150,9 +150,20 @@ function createToolRegister({ description, aliases, checker_url, has_checker, na
 // Convert a SWC object into a TRS-Filer POST API object
 function swcConverter(swcObj) {
     const organization = GITHUB_BASE_URL + '/' + swcObj.full_name.split('/')[0];
-    const toolclass = createToolclassRegisterId({ description: swcObj.description, name: swcObj.full_name });
-    const version = createToolVersionRegisterId({ author: [swcObj.full_name], name: swcObj.full_name, verified: true, verified_source: ["Snakemake Workflow Catalog"] });
-    const trsObj = createToolRegister({ description: swcObj.description, name: swcObj.full_name, organization: organization, toolclass: toolclass, versions: [version] })
+    const toolclass = createToolclassRegisterId({description: swcObj.description, name: swcObj.full_name});
+    const version = createToolVersionRegisterId({
+        author: [swcObj.full_name],
+        name: swcObj.full_name,
+        verified: true,
+        verified_source: ["Snakemake Workflow Catalog"]
+    });
+    const trsObj = createToolRegister({
+        description: swcObj.description,
+        name: swcObj.full_name,
+        organization: organization,
+        toolclass: toolclass,
+        versions: [version]
+    })
     return trsObj;
 }
 
@@ -169,7 +180,7 @@ function postTRSTool(trsObj) {
 
 async function checkToolExists(name) {
     try {
-        const response = await axios.get(TRS_API_URL, { params: { limit: 1, toolname: name } });
+        const response = await axios.get(TRS_API_URL, {params: {limit: 1, toolname: name}});
         //console.log(response['data']);
         return response['data'] && response['data'].length > 0
     } catch (error) {
@@ -179,7 +190,7 @@ async function checkToolExists(name) {
 }
 
 // Get the latest Snakemake Workflow Catalogue data file and POST all tools to TRS-Filer
-axios.get(SWC_DATA_URL).then(({ data }) => {
+axios.get(SWC_DATA_URL).then(({data}) => {
     // Parse the SWC data.js file while skipping the intial "var data =" line
     data = JSON.parse(data.substring(data.indexOf("\n") + 1));
     let count = 0;
@@ -188,11 +199,14 @@ axios.get(SWC_DATA_URL).then(({ data }) => {
         const isToolExists = await checkToolExists(it.full_name)
         if (!isToolExists) {
             const trsObject = swcConverter(it);
-            try { postTRSTool(trsObject) } catch (e) {
-                console.error(it);
+            try {
+                postTRSTool(trsObject)
+                console.log(`Added tool #${count} ${trsObject.name}`)
+            } catch (e) {
+                console.log(`Could not add tool #${count} ${trsObject.name}`)
             }
-            console.log(`Added tool #${count} ${trsObject.name}`);
-            count += 1;
+            console.error(it);
         }
+        count += 1;
     });
 });
