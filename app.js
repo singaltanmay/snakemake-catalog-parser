@@ -29,10 +29,7 @@ function deleteNullNonReqdKeys(obj, reqd) {
     return Object.fromEntries(Object.entries(obj).filter(([_, v]) => reqd.includes(v) || (v && v != null && v != 'null')));
 }
 
-function createChecksumRegister({
-                                    checksum,
-                                    type
-                                }) {
+function createChecksumRegister({checksum, type}) {
     const obj = {
         checksum,
         type
@@ -41,14 +38,7 @@ function createChecksumRegister({
     return deleteNullNonReqdKeys(obj, reqdKeys);
 }
 
-function createImageDataRegister({
-                                     checksum,
-                                     image_name,
-                                     image_type,
-                                     registry_host,
-                                     size,
-                                     updated
-                                 }) {
+function createImageDataRegister({checksum, image_name, image_type, registry_host, size, updated}) {
     const obj = {
         checksum,
         image_name,
@@ -60,11 +50,7 @@ function createImageDataRegister({
     return deleteNullNonReqdKeys(obj, []);
 }
 
-function createFileWrapperRegister({
-                                       checksum,
-                                       content,
-                                       url
-                                   }) {
+function createFileWrapperRegister({checksum, content, url}) {
     const obj = {
         checksum,
         content,
@@ -82,11 +68,7 @@ function createToolFileRegister({file_type, path = "string"}) {
     return deleteNullNonReqdKeys(obj, reqdKeys);
 }
 
-function createFilesRegister({
-                                 file_wrapper,
-                                 tool_file,
-                                 type
-                             }) {
+function createFilesRegister({file_wrapper, tool_file, type}) {
     const obj = {file_wrapper, tool_file, type};
     const reqdKeys = ['file_wrapper', 'tool_file', 'type'];
     return deleteNullNonReqdKeys(obj, reqdKeys);
