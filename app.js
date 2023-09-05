@@ -1,4 +1,5 @@
 const axios = require('axios');
+const {Octokit} = require("@octokit/core");
 require('dotenv').config();
 
 const TRS_API_URL = process.env.TRS_API_URL;
@@ -9,7 +10,8 @@ const DESCRIPTER_TYPES = {
     CWL: "CWL",
     WDL: "WDL",
     NFL: "NFL",
-    GALAXY: "GALAXY"
+    GALAXY: "GALAXY",
+    SNAKEMAKE_WORKFLOW: "SWF"
 }
 const IMAGE_TYPE = {
     DOCKER: "Docker",
@@ -23,6 +25,8 @@ const FILE_TYPE = {
     CONTAINERFILE: "CONTAINERFILE",
     OTHER: "OTHER"
 }
+
+const VERIFIED_SOURCE_SWC = "SNAKEMAKE_WORKFLOW_CATALOG";
 
 // Deletes all non-required keys if they are undefined or null
 function deleteNullNonReqdKeys(obj, reqd) {
@@ -129,24 +133,99 @@ function createToolRegister({description, aliases, checker_url, has_checker, nam
     return deleteNullNonReqdKeys(obj, reqdKeys);
 }
 
+const octokit = new Octokit({auth: process.env.GITHUB_TOKEN})
+
+// Fetch releases from GitHub's REST API
+async function fetchGitHubReleases(owner, repo) {
+    let requestOptions = {
+        owner,
+        repo,
+        headers: {
+            'X-GitHub-Api-Version': '2022-11-28'
+        }
+    };
+    try {
+        let releases = await octokit.request('GET /repos/{owner}/{repo}/releases', requestOptions);
+        const {status, url, headers, data} = await releases
+        if (status === 200) return data;
+        else throw Error(`Error: HTTP status ${status} for URL ${url}\n`);
+    } catch (e) {
+        throw new Error(`Octokit request to List Releases failed for ${JSON.stringify(requestOptions)}\n${e}`);
+    }
+}
+
+// Package version details into TRS format after fetching from GitHub
+async function getToolVersions(repoFullName) {
+    try {
+        const [owner, repo] = repoFullName.split('/');
+        const releases = await fetchGitHubReleases(owner, repo);
+        // if (releases.length > 0) {
+        //     console.log(releases);
+        // }
+        const releaseToolVersions = [];
+        for (let i = 0; i < releases.length; i++) {
+            const release = releases[i];
+            const files = [];
+            if (release.tarball_url) {
+                const fileWrapperRegister = createFileWrapperRegister({url: release.tarball_url});
+                const toolFileRegister = createToolFileRegister({
+                    file_type: FILE_TYPE.OTHER,
+                    path: release.tarball_url
+                });
+                let filesRegister = createFilesRegister({
+                    file_wrapper: fileWrapperRegister,
+                    tool_file: toolFileRegister,
+                    type: FILE_TYPE.OTHER
+                });
+                files.push(filesRegister);
+            }
+            if (release.zipball_url) {
+                const fileWrapperRegister = createFileWrapperRegister({url: release.zipball_url});
+                const toolFileRegister = createToolFileRegister({
+                    file_type: FILE_TYPE.OTHER,
+                    path: release.zipball_url
+                });
+                let filesRegister = createFilesRegister({
+                    file_wrapper: fileWrapperRegister,
+                    tool_file: toolFileRegister,
+                    type: FILE_TYPE.OTHER
+                });
+                files.push(filesRegister);
+            }
+            const trsToolVersion = {
+                id: release.id,
+                author: release.html_url,
+                descriptor_type: DESCRIPTER_TYPES.SNAKEMAKE_WORKFLOW,
+                files,
+                is_production: !release.prerelease && !release.draft,
+                name: release.name,
+                verified: true,
+                verified_source: [VERIFIED_SOURCE_SWC]
+            };
+            let toolVersionRegisterId = deleteNullNonReqdKeys(trsToolVersion, ['id']);
+            releaseToolVersions.push(createToolVersionRegisterId(toolVersionRegisterId));
+        }
+        return releaseToolVersions;
+    } catch (e) {
+        console.error(e);
+        return [];
+    }
+}
+
 // Convert a SWC object into a TRS-Filer POST API object
-function swcConverter(swcObj) {
+async function swcConverter(swcObj) {
     const organization = GITHUB_BASE_URL + '/' + swcObj.full_name.split('/')[0];
     const toolclass = createToolclassRegisterId({description: swcObj.description, name: swcObj.full_name});
-    const version = createToolVersionRegisterId({
-        author: [swcObj.full_name],
-        name: swcObj.full_name,
-        verified: true,
-        verified_source: ["Snakemake Workflow Catalog"]
-    });
-    const trsObj = createToolRegister({
+    const toolRegister = createToolRegister({
         description: swcObj.description,
         name: swcObj.full_name,
         organization: organization,
         toolclass: toolclass,
-        versions: [version]
+        versions: await getToolVersions(swcObj.full_name)
     })
-    return trsObj;
+    let reqdKeys = ['organization', 'toolclass', 'versions'];
+    let result = deleteNullNonReqdKeys(toolRegister, reqdKeys);
+    return result;
 }
 
 function postTRSTool(trsObj) {
@@ -171,16 +250,19 @@ async function checkToolExists(name) {
     }
 }
 
+console.log("Program is running!")
+
 // Get the latest Snakemake Workflow Catalogue data file and POST all tools to TRS-Filer
 axios.get(SWC_DATA_URL).then(({data}) => {
     // Parse the SWC data.js file while skipping the intial "var data =" line
+    console.log("Response received");
     data = JSON.parse(data.substring(data.indexOf("\n") + 1));
     let count = 0;
     data.forEach(async it => {
         // Check if tool already exists in TRS
         const isToolExists = await checkToolExists(it.full_name)
-        if (!isToolExists) {
-            const trsObject = swcConverter(it);
+        if (true || !isToolExists) {
+            const trsObject = await swcConverter(it);
             try {
                 postTRSTool(trsObject)
                 console.log(`Added tool #${count} ${trsObject.name}`)
